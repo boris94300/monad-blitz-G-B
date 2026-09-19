@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /host/
+Disallow: /join/
+Disallow: /scene/
+Disallow: /setup
+Disallow: /api/

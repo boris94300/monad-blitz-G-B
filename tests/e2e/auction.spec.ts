@@ -1,0 +1,71 @@
+import {test,expect} from '@playwright/test';
+test('seller broadcasts, two phones join, one winner, outsider cannot control room',async({browser,request})=>{
+  const created=await request.post('/api/rooms',{data:{name:'Vente du chaos',mode:'demo'}});
+  expect(created.ok()).toBeTruthy();const {room,hostToken}=await created.json();
+  const unauthorized=await request.post(`/api/rooms/${room.code}/start`,{data:{}});expect(unauthorized.status()).toBe(400);
+  const hostContext=await browser.newContext({permissions:['camera','microphone']});
+  await hostContext.addInitScript(({code,token})=>localStorage.setItem(`host:${code}`,token),{code:room.code,token:hostToken});
+  const host=await hostContext.newPage();await host.goto(`/host/${room.code}`);
+  await expect(host.getByRole('heading',{name:'Vente du chaos'})).toBeVisible();
+  await host.getByRole('button',{name:'Activer la caméra'}).click();
+  await expect(host.getByText('EN DIRECT',{exact:true})).toBeVisible();
+  const buyerContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  const buyer=await buyerContext.newPage();await buyer.goto(`/join/${room.code}`);
+  await expect(buyer.getByText('EN DIRECT',{exact:true})).toBeVisible();
+  await expect.poll(async()=>await buyer.locator('.video-shell video').count()+await buyer.locator('.live-image').count()).toBeGreaterThan(0);
+  const backupContext=await browser.newContext({viewport:{width:390,height:844}});
+  await backupContext.addInitScript(()=>{Object.defineProperty(window,'RTCPeerConnection',{value:class{constructor(){throw new Error('WebRTC bloqué pour vérifier le secours');}}});});
+  const backup=await backupContext.newPage();await backup.goto(`/join/${room.code}`);
+  await expect(backup.locator('.live-image')).toBeVisible();
+  await expect(backup.getByText('DIRECT · DÉBIT RÉDUIT',{exact:true})).toBeVisible();
+  await host.getByRole('button',{name:'Essayer avec un décor fictif'}).click();
+  await expect(host.getByRole('heading',{name:'Trône du stagiaire suprême'})).toBeVisible();
+  await host.getByRole('button',{name:'Lancer l’enchère'}).click();
+  await expect(buyer.getByRole('button',{name:'Je craque · achat simulé'})).toBeEnabled();
+  await buyer.getByLabel('Votre nom de collectionneur').fill('Alice du chaos');
+  await buyer.screenshot({path:'test-results/mobile-live.png',fullPage:true});
+  await host.screenshot({path:'test-results/host-live.png',fullPage:true});
+  const before=await (await request.get(`/api/rooms/${room.code}`)).json();
+  await buyer.getByRole('button',{name:'Je craque · achat simulé'}).click();
+  await expect(buyer.getByText('ADJUGÉ À ALICE DU CHAOS')).toBeVisible();
+  await expect(host.getByText('ADJUGÉ À ALICE DU CHAOS')).toBeVisible();
+  await expect(backup.getByText('ADJUGÉ À ALICE DU CHAOS')).toBeVisible();
+  const late=await request.post(`/api/rooms/${room.code}/buy`,{data:{buyer:'Bob trop tard',lotId:before.active.id}});
+  expect(late.status()).toBe(400);
+  const final=await (await request.get(`/api/rooms/${room.code}`)).json();expect(final.active.buyer).toBe('Alice du chaos');expect(final.history).toHaveLength(1);
+  await host.getByRole('button',{name:'Couper le live'}).click();
+  await expect(buyer.getByText('EN ATTENTE',{exact:true})).toBeVisible();
+  await backupContext.close();await buyerContext.close();await hostContext.close();
+});
+test('home works at desktop and mobile widths with no horizontal overflow',async({page})=>{
+  await page.setViewportSize({width:1440,height:1000});await page.goto('/');
+  await expect(page.getByRole('heading',{name:/Tout doit/})).toBeVisible();
+  await page.screenshot({path:'test-results/home-desktop.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  await page.screenshot({path:'test-results/home-mobile.png',fullPage:true});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+  await page.getByRole('button',{name:'Ouvrir ma salle'}).click();await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('button',{name:'Fermer',exact:true}).click();
+  await page.getByLabel('Code de la salle').fill('FFFFFFFF');await page.getByRole('button',{name:'Entrer',exact:true}).click();
+  await expect(page.locator('.home-error')).toContainText('Salle introuvable');
+});
+
+test('local vision model actually runs on the camera without any paid API',async({browser,request})=>{
+  test.setTimeout(120000);
+  const {room,hostToken}=await (await request.post('/api/rooms',{data:{name:'Test vision locale',mode:'demo'}})).json();
+  const context=await browser.newContext({permissions:['camera']});
+  await context.addInitScript(({code,token})=>localStorage.setItem(`host:${code}`,token),{code:room.code,token:hostToken});
+  const page=await context.newPage();await page.goto(`/host/${room.code}`);
+  await page.getByRole('button',{name:'Activer la caméra'}).click();
+  await expect(page.getByText('EN DIRECT',{exact:true})).toBeVisible();
+  const responsePromise=page.waitForResponse(r=>r.url().endsWith(`/api/rooms/${room.code}/scan`),{timeout:90000});
+  await page.getByRole('button',{name:'Prochaine victime'}).click();
+  const response=await responsePromise;
+  const input=response.request().postDataJSON();
+  expect(input.source).toBe('local');expect(Array.isArray(input.candidates)).toBeTruthy();
+  // La caméra synthétique de Chromium n'est pas une photographie d'objet :
+  // une détection vide doit être une erreur explicite, jamais un faux résultat.
+  if(response.status()===400)expect((await response.json()).error).toContain('Aucune cible reconnue');
+  else expect(response.ok()).toBeTruthy();
+  await context.close();
+});

@@ -1,0 +1,18 @@
+import {createPublicClient,http,keccak256} from 'viem';
+import {monadTestnet} from 'viem/chains';
+import {readFileSync,writeFileSync} from 'node:fs';
+import solc from 'solc';
+const address=process.argv[2];
+if(!/^0x[0-9a-fA-F]{40}$/.test(address||''))throw new Error('Adresse de contrat attendue');
+const client=createPublicClient({chain:monadTestnet,transport:http('https://testnet-rpc.monad.xyz')});
+if(await client.getChainId()!==10143)throw new Error('Mauvais réseau');
+const deployed=await client.getCode({address});if(!deployed||deployed==='0x')throw new Error('Aucun contrat à cette adresse');
+const content=readFileSync('contracts/src/DutchAuction.sol','utf8');
+const compiled=JSON.parse(solc.compile(JSON.stringify({language:'Solidity',sources:{'DutchAuction.sol':{content}},settings:{optimizer:{enabled:true,runs:200},evmVersion:'paris',outputSelection:{'*':{'*':['evm.deployedBytecode.object']}}}})));
+const expected=`0x${compiled.contracts['DutchAuction.sol'].DutchAuction.evm.deployedBytecode.object}`;
+if(deployed.toLowerCase()!==expected.toLowerCase())throw new Error('Le bytecode déployé ne correspond pas au contrat compilé');
+const artifact=JSON.parse(readFileSync('public/DutchAuction.json','utf8'));
+const itemCount=await client.readContract({address,abi:artifact.abi,functionName:'itemCount'});
+const record={chainId:10143,network:'Monad Testnet',address,transactionHash:process.argv[3]||null,abiFile:'../public/DutchAuction.json',status:'deployed-and-bytecode-verified',verifiedAt:new Date().toISOString(),runtimeBytecodeHash:keccak256(deployed)};
+writeFileSync('contracts/deployments.json',JSON.stringify(record,null,2)+'\n');
+console.log(JSON.stringify({address,chainId:10143,bytecodeMatches:true,itemCount:Number(itemCount),runtimeBytecodeHash:record.runtimeBytecodeHash}));

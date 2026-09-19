@@ -1,0 +1,22 @@
+BRIC À BRAC — LIQUIDATION DU FUTUR
+
+Pour démarrer : double-cliquez sur Demarrer.cmd.
+Pour arrêter : fermez sa fenêtre une fois la démo terminée.
+
+Sur ce PC : http://localhost:3000
+Déploiement du contrat avec votre wallet : http://localhost:3000/setup
+
+Le téléphone vendeur doit ouvrir le lien HTTPS public, pas localhost.
+Créez la salle depuis ce téléphone, activez la caméra, puis partagez le QR
+avec les acheteurs. Ouvrez « Vue grand écran » sur le PC de projection.
+
+« Répétition » : achats simulés, aucun wallet requis.
+« Monad Testnet » : activé après déploiement et configuration du contrat.
+
+Une personne devient uniquement un personnage fictif, avec son accord.
+Les prix sont des valeurs de jeu. Rien de réel n'est vendu.
+
+Le serveur doit rester démarré. Les salles ne survivent pas à son redémarrage.
+L'historique des vraies transactions testnet reste sur la blockchain.
+
+Le README explique les tests, le déploiement et le pitch de 3 minutes.

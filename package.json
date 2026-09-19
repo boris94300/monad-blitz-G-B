@@ -1,0 +1,43 @@
+{
+  "name": "liquidation-du-futur",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server/index.ts",
+    "build": "node scripts/ensure-model.mjs && next build --webpack",
+    "start": "tsx server/index.ts --production",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "contracts:compile": "node scripts/compile-contract.mjs",
+    "model:download": "node scripts/download-model.mjs",
+    "contracts:test": "node scripts/run-forge.mjs",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "next": "16.3.5",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "viem": "^2.40.0",
+    "zod": "^4.1.0",
+    "dotenv": "^17.2.0",
+    "qrcode.react": "^4.2.0",
+    "lucide-react": "^0.468.0",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow-models/coco-ssd": "^2.2.3",
+    "tsx": "^4.20.0"
+  },
+  "overrides": { "tmp": "^0.2.6" },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/express": "^5.0.0",
+    "@playwright/test": "^1.56.0",
+    "solc": "0.8.30"
+  }
+}

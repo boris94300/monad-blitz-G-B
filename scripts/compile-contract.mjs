@@ -1,0 +1,10 @@
+import solc from 'solc';
+import {readFileSync, writeFileSync, mkdirSync} from 'node:fs';
+const content = readFileSync('contracts/src/DutchAuction.sol', 'utf8');
+const result = JSON.parse(solc.compile(JSON.stringify({language:'Solidity', sources:{'DutchAuction.sol':{content}}, settings:{optimizer:{enabled:true,runs:200}, evmVersion:'paris', outputSelection:{'*':{'*':['abi','evm.bytecode.object','evm.deployedBytecode.object']}}}})));
+for (const err of result.errors || []) console.log(err.formattedMessage);
+if (result.errors?.some(e => e.severity === 'error')) process.exit(1);
+const c = result.contracts['DutchAuction.sol'].DutchAuction;
+mkdirSync('public', {recursive:true});
+writeFileSync('public/DutchAuction.json', JSON.stringify({abi:c.abi,bytecode:`0x${c.evm.bytecode.object}`,chainId:10143},null,2));
+console.log(`DutchAuction compilé : ${c.evm.deployedBytecode.object.length / 2} octets.`);

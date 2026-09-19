@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: bric-a-brac-monad
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run contracts:compile && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.13.1
+      - key: NODE_ENV
+        value: production
+      - key: CONTRACT_ADDRESS
+        sync: false
+      - key: MONAD_RPC_URL
+        value: https://testnet-rpc.monad.xyz

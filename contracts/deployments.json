@@ -1,0 +1,10 @@
+{
+  "chainId": 10143,
+  "network": "Monad Testnet",
+  "address": "0x1dc0ead510654e1b494d30d9ba3325a7a047bfce",
+  "transactionHash": null,
+  "abiFile": "../public/DutchAuction.json",
+  "status": "deployed-and-bytecode-verified",
+  "verifiedAt": "2026-09-19T12:20:48.563Z",
+  "runtimeBytecodeHash": "0x82880922b0a3eeb48730bc7412747ed408dd29fc46552f6b3c85d003adc4a816"
+}

@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.env
+.env.*
+!.env.example
+out/
+cache/
+broadcast/
+.tools/
+test-results/
+playwright-report/
+*.log
+*.tsbuildinfo
+public/models/coco/
+.DS_Store
