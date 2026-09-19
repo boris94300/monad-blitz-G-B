@@ -13,9 +13,10 @@ export async function connectWallet(){
   if(await wallet.getChainId()!==10143)throw new Error('Choisissez Monad Testnet dans votre wallet.');
   return {wallet,account};
 }
-export async function listOnChain(address:Address,lot:Lot){
+export async function listOnChain(address:Address,input:Lot|Lot[]){
   const {wallet,account}=await connectWallet();
-  return wallet.writeContract({address,abi:auctionAbi,functionName:'listItems',account,args:[[{name:lot.name,startPrice:parseEther(String(lot.startPrice)),floorPrice:parseEther(String(lot.floorPrice)),duration:lot.duration}]]});
+  const lots=Array.isArray(input)?input:[input];
+  return wallet.writeContract({address,abi:auctionAbi,functionName:'listItems',account,args:[lots.map(lot=>({name:lot.name,startPrice:parseEther(String(lot.startPrice)),floorPrice:parseEther(String(lot.floorPrice)),duration:lot.duration}))]});
 }
 export async function buyOnChain(address:Address,lot:Lot){
   const {wallet,account}=await connectWallet();

@@ -29,7 +29,7 @@ Le build télécharge environ 19 Mo de poids publics COCO-SSD depuis TensorFlow 
 2. Activer la caméra (et, éventuellement, le micro avant le démarrage).
 3. Sur le PC de projection, ouvrir la **vue grand écran** `/scene/CODE`.
 4. Les acheteurs scannent le QR ou ouvrent `/join/CODE`.
-5. Cadrer des objets courants : chaise, tasse, bouteille, ordinateur, livre… Cliquer **Prochaine victime**. Une capture est analysée et le serveur tire au sort parmi les éléments reconnus avec une confiance d’au moins 45 %.
+5. Cadrer des objets courants : chaise, tasse, bouteille, ordinateur, livre… Cliquer **Sélectionner jusqu’à 5 objets**. La capture et cinq zones agrandies sont analysées. Le serveur conserve une seule instance par catégorie, avec priorité aux petits objets et exclusion des meubles si leur contenu est reconnu.
 6. Le vendeur valide le lot avec **Lancer l’enchère**. Le public voit le même prix et le même gagnant.
 7. Après l’achat, le gagnant reçoit un titre absurde. Relancer un tour.
 
@@ -71,14 +71,14 @@ Ne jamais placer de clé privée ou de phrase de récupération dans le dépôt 
 - `buy` : le premier achat valide gagne. Le contrat marque le lot vendu avant les transferts, paie le vendeur et rembourse le trop-perçu. Une protection empêche les rappels pendant le paiement. Un transfert refusé annule toute la transaction.
 - `getItem` et `itemCount` : l’interface lit les lots. Un lot vendu conserve son prix d’achat.
 
-Le vendeur ne peut pas acheter son propre lot. Après la durée, un lot invendu reste achetable au plancher. L’interface autorise un seul lot actif par salle ; le contrat peut en gérer plusieurs. Pas de mécanisme d’annulation dans ce prototype.
+Le vendeur ne peut pas acheter son propre lot. Après la durée, un lot invendu reste achetable au plancher. L’interface autorise jusqu’à cinq lots simultanés par salle, inscrits dans une seule transaction. Chaque acheteur choisit un lot indépendamment. Il faut terminer les ventes actives avant une nouvelle sélection. Pas de mécanisme d’annulation dans ce prototype.
 
 Le navigateur affiche une interpolation avec l’heure serveur ; **le contrat fait autorité**. À l’achat, le client relit le prix sur Monad. Le serveur vérifie la transaction de création et lit l’état du contrat pour annoncer le gagnant. Un appel à l’API de répétition ne peut pas vendre un lot blockchain.
 
 ## Architecture et hébergement
 
 - Next.js App Router + React + TypeScript : accueil, régie, participant, projection, déploiement.
-- Serveur Node/Express + Socket.IO : salles, autorisation vendeur, tirage aléatoire, état, réactions, signalisation vidéo.
+- Serveur Node/Express + Socket.IO : salles, autorisation vendeur, sélection de cinq catégories, état, réactions, signalisation vidéo.
 - WebRTC : diffusion pair à pair du vendeur aux spectateurs, audio facultatif.
 - Secours JPEG : 4 images/seconde, sans audio, si WebRTC ne passe pas. Le mode est indiqué à l’écran. Les images périmées disparaissent.
 - TensorFlow.js/COCO-SSD : détection locale ; catalogue humoristique et prix fictifs calculés localement côté serveur.
@@ -126,3 +126,13 @@ Les tests navigateur utilisent une caméra synthétique, jamais la caméra perso
 **2:30–3:00** — Montrer la transaction et expliquer : « Pas une transaction pour chaque baisse : le prix est une fonction du temps. Monad enregistre le gagnant. L’IA reconnaît ; le hasard choisit ; vous regrettez. »
 
 Une mise en vente nécessite aussi une transaction. La nouveauté revendiquée est l’expérience collective, pas l’invention des enchères à la baisse.
+
+## Interface Maison de vente et vision multi-objets
+
+- Thème noir, ivoire et or, sélection défilante à droite du live et vignettes recadrées. Sur mobile la sélection suit immédiatement la vidéo.
+- Cinq prix indépendants descendent simultanément. Le volume et le nombre d’acquisitions viennent uniquement des achats de la salle (explicitement simulés en répétition).
+- Repérage local périodique : une analyse à la fois, environ toutes les deux secondes plus le temps d’inférence. Une passe sur trois analyse aussi les zones agrandies. Les cadres suivent les nouvelles détections par catégorie ; ils ne garantissent pas l’identité persistante de deux objets semblables. Les cadres obsolètes disparaissent après 4,5 secondes.
+- Les humains sont exclus par défaut ; activer « Inclure les personnages consentants » pour une carte fictive.
+- COCO-SSD reste limité à ses 80 catégories. Les écouteurs, mouchoirs et miettes ne sont pas garantis. « Cadrer un petit objet » permet de dessiner une zone sur une capture et de nommer ce détail ; le lot est explicitement marqué cadrage manuel. Ce détail manuel n’est pas suivi automatiquement en vidéo.
+- Le modèle local et le cadrage manuel fonctionnent sans clé API. La vision distante optionnelle privilégie désormais les petits objets et une image haute définition, mais nécessite une configuration séparée.
+- Les tests navigateur vérifient cinq lots, deux achats distincts, les doublons, les cadres synchronisés et leur expiration, le cadrage manuel, la caméra séparée et le rendu mobile. Les scènes de test sont synthétiques, pas une mesure de précision sur de vrais petits objets.

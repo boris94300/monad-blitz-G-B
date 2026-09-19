@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import './luxury.css';
 export const metadata: Metadata = {
   title: 'BRIC À BRAC — Liquidation du futur',
   description: 'Le téléachat du chaos. Filmez. L’IA expertise. Le prix dégringole. Monad tranche.'

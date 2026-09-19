@@ -7,7 +7,7 @@ import next from 'next';
 import {z} from 'zod';
 import {createPublicClient, http, isAddress, parseEventLogs, formatEther, parseEther} from 'viem';
 import {auctionAbi, monadTestnet} from '../lib/chain';
-import {rooms,createRoom,publicRoom,selectCandidate,makeLot,sellDemo} from './rooms';
+import {rooms,createRoom,publicRoom,selectCandidates,makeLot,sellDemo} from './rooms';
 import type {InternalRoom} from './rooms';
 import {candidateSchema,scanVision} from './vision';
 import type {VisionCandidate} from './vision';
@@ -64,14 +64,16 @@ app.get('/api/rooms/:code/camera-access',(req,res)=>res.json({cameraToken:host(r
 app.post('/api/rooms/:code/scan',async(req,res)=>{
   const room=host(req);
   if(room.busy) throw new Error('L’expert réfléchit déjà.');
-  if(room.active?.status==='active') throw new Error('Vendez le lot en cours avant de changer de cible.');
+  if(room.lots.some(l=>l.status==='active')) throw new Error('Vendez le lot en cours avant de changer de cible.');
   if(Date.now()-room.lastScan<2500) throw new Error('Laissez deux secondes à notre expert.');
-  const body=z.object({image:imageSchema,candidates:z.array(candidateSchema).max(30).optional(),includePeople:z.boolean().default(false),source:z.enum(['local','vision','rehearsal']),duration:z.number().int().min(15).max(180).default(60)}).parse(req.body);
+  const body=z.object({image:imageSchema,candidates:z.array(candidateSchema).max(150).optional(),includePeople:z.boolean().default(false),source:z.enum(['local','vision','rehearsal']),duration:z.number().int().min(15).max(180).default(60)}).parse(req.body);
   if(body.source==='rehearsal'&&room.mode!=='demo') throw new Error('Les objets de répétition sont réservés aux salles de répétition.');
   room.busy=true;room.lastScan=Date.now();
   try {
     const candidates:Candidate[]=body.source==='vision' ? await scanVision(body.image,body.includePeople) : body.candidates || [];
-    const chosen=selectCandidate(candidates,body.includePeople);
+    const selected=selectCandidates(candidates,body.includePeople);
+    if(!selected.length)throw new Error('Aucune cible reconnue. Rapprochez-vous d’un objet bien éclairé et réessayez.');
+    const lots=selected.map(chosen=>{
     const lot=makeLot(chosen,body.image,room.mode,body.source);lot.duration=body.duration;
     if(body.source==='vision') {
       const enriched=chosen as VisionCandidate;
@@ -79,34 +81,51 @@ app.post('/api/rooms/:code/scan',async(req,res)=>{
       lot.estimatedPrice=room.mode==='chain'?enriched.estimatedPrice:enriched.estimatedPrice*1000;
       lot.startPrice=Number((lot.estimatedPrice*2.5).toFixed(6));lot.floorPrice=Number((lot.estimatedPrice*.15).toFixed(6));
     }
-    room.active=lot;publish(room);res.json({lot,count:candidates.filter(c=>body.includePeople||!c.person).length});
+    return lot;});
+    room.lots=lots;room.active=lots[0];publish(room);res.json({lot:lots[0],lots,count:lots.length});
   } finally {room.busy=false;}
 });
+app.post('/api/rooms/:code/detail',(req,res)=>{
+  const room=host(req);
+  if(room.busy||room.lots.some(l=>l.status==='active'))throw new Error('Terminez la vente en cours avant de modifier la sélection.');
+  const body=z.object({image:imageSchema,candidate:candidateSchema,duration:z.number().int().min(15).max(180)}).parse(req.body);
+  const current=room.lots.filter(l=>l.status==='preview');
+  if(current.length>=5)throw new Error('La sélection contient déjà cinq objets.');
+  if(current.some(l=>(l.detectionLabel||l.label).toLowerCase()===body.candidate.label.toLowerCase()))throw new Error('Cette catégorie est déjà présente.');
+  const lot=makeLot(body.candidate,body.image,room.mode,'manual');lot.duration=body.duration;
+  room.lots=[...current,lot];room.active=room.lots[0];publish(room);res.json(publicRoom(room));
+});
 app.post('/api/rooms/:code/start',async(req,res)=>{
-  const room=host(req),lot=room.active;
-  if(!lot||lot.status!=='preview') throw new Error('Choisissez d’abord une cible.');
-  if(room.busy) throw new Error('Opération déjà en cours.');
+  const room=host(req),lots=room.lots.filter(l=>l.status==='preview');
+  if(!lots.length)throw new Error('Choisissez d’abord une cible.');
+  if(room.busy)throw new Error('Opération déjà en cours.');
   room.busy=true;
   try{
-    if(room.mode==='chain') {
+    if(room.mode==='chain'){
       const hash=z.string().regex(/^0x[a-fA-F0-9]{64}$/).parse(req.body.txHash) as `0x${string}`;
       const receipt=await client.waitForTransactionReceipt({hash,timeout:30000});
-      if(receipt.status!=='success') throw new Error('La transaction de mise en vente a échoué.');
+      if(receipt.status!=='success')throw new Error('La transaction de mise en vente a échoué.');
       const logs=parseEventLogs({abi:auctionAbi,logs:receipt.logs.filter(l=>l.address.toLowerCase()===address!.toLowerCase()),eventName:'ItemListed'});
-      const event=logs.find(e=>e.args.name===lot.name&&e.args.startPrice===parseEther(String(lot.startPrice))&&e.args.floorPrice===parseEther(String(lot.floorPrice))&&e.args.duration===lot.duration);
-      if(!event) throw new Error('Cette transaction ne correspond pas au lot choisi.');
-      if(Date.now()/1000-Number(event.args.startTime)>300) throw new Error('Transaction trop ancienne.');
-      if([...rooms.values()].some(r=>r!==room && (r.active?.chainId===String(event.args.id)||r.history.some(l=>l.chainId===String(event.args.id))))) throw new Error('Ce lot est déjà lié à une autre salle.');
-      lot.chainId=String(event.args.id);lot.startTime=Number(event.args.startTime)*1000;lot.txHash=hash;
-    } else {lot.startTime=Math.floor(Date.now()/1000)*1000;}
-    lot.status='active';publish(room);res.json(publicRoom(room));
-  } finally {room.busy=false;}
+      const used=new Set<string>();
+      // Validate every event before mutating any lot, including duplicate names.
+      const events=lots.map(lot=>{
+        const event=logs.find(e=>!used.has(String(e.args.id))&&e.args.name===lot.name&&e.args.startPrice===parseEther(String(lot.startPrice))&&e.args.floorPrice===parseEther(String(lot.floorPrice))&&e.args.duration===lot.duration);
+        if(!event)throw new Error('Cette transaction ne correspond pas à toute la sélection.');
+        const id=String(event.args.id);used.add(id);
+        if(Date.now()/1000-Number(event.args.startTime)>300)throw new Error('Transaction trop ancienne.');
+        if([...rooms.values()].some(r=>[...r.lots,...r.history].some(l=>l.chainId===id)))throw new Error('Ce lot est déjà lié à une salle.');
+        return event;
+      });
+      lots.forEach((lot,i)=>{lot.chainId=String(events[i].args.id);lot.startTime=Number(events[i].args.startTime)*1000;lot.txHash=hash;});
+    }else lots.forEach(l=>l.startTime=Math.floor(Date.now()/1000)*1000);
+    lots.forEach(l=>l.status='active');publish(room);res.json(publicRoom(room));
+  }finally{room.busy=false;}
 });
 app.post('/api/rooms/:code/buy',(req,res)=>{
   const room=getRoom(String(req.params.code));
   const body=z.object({buyer:z.string().trim().min(1).max(24),lotId:z.string().uuid()}).parse(req.body);
-  if(room.active?.id!==body.lotId) throw new Error('Le lot a changé.');
-  sellDemo(room,body.buyer);publish(room);res.json(publicRoom(room));
+  if(!room.lots.some(l=>l.id===body.lotId)) throw new Error('Le lot a changé.');
+  sellDemo(room,body.buyer,body.lotId);publish(room);res.json(publicRoom(room));
 });
 app.post('/api/rooms/:code/refresh',async(req,res)=>{
   const room=getRoom(String(req.params.code));await reconcile(room);res.json(publicRoom(room));
@@ -120,16 +139,16 @@ app.post('/api/rooms/:code/close',(req,res)=>{
 
 const polling=new Set<string>();
 async function reconcile(room:InternalRoom) {
-  const lot=room.active;
-  if(!address||room.mode!=='chain'||lot?.status!=='active'||lot.chainId===undefined||polling.has(room.code)) return;
+  const active=room.lots.filter(l=>l.status==='active'&&l.chainId!==undefined);
+  if(!address||room.mode!=='chain'||!active.length||polling.has(room.code))return;
   polling.add(room.code);
   try{
-    const item=await client.readContract({address,abi:auctionAbi,functionName:'getItem',args:[BigInt(lot.chainId)]});
-    room.chainHealthy=true;
-    if(item.sold && room.active?.id===lot.id && lot.status==='active') {
-      lot.status='sold';lot.buyer=item.buyer;lot.soldPrice=Number(formatEther(item.soldPrice));
-      room.history.push({...lot});room.history=room.history.slice(-12);publish(room);
-    }
+    const items=await Promise.all(active.map(lot=>client.readContract({address:address!,abi:auctionAbi,functionName:'getItem',args:[BigInt(lot.chainId!)]})));
+    let changed=!room.chainHealthy;room.chainHealthy=true;
+    active.forEach((lot,i)=>{const item=items[i];if(item.sold&&lot.status==='active'){
+      lot.status='sold';lot.buyer=item.buyer;lot.soldPrice=Number(formatEther(item.soldPrice));room.salesCount++;room.volume+=lot.soldPrice;room.history.push({...lot});changed=true;
+    }});
+    room.history=room.history.slice(-12);if(changed)publish(room);
   }catch{if(room.chainHealthy){room.chainHealthy=false;publish(room);}}
   finally{polling.delete(room.code);}
 }
@@ -188,6 +207,14 @@ io.on('connection',socket=>{
       if(JSON.stringify(payload).length>24000) return;
       const allowed=joined.sourceSocket===socket.id?(joined.peers.has(to)||to===joined.hostSocket):(to===joined.sourceSocket&&(isHost||joined.peers.has(socket.id)));
       if(allowed) io.to(to).emit('signal',{from:socket.id,payload});
+    }catch{}
+  });
+  socket.on('tracking',(data:unknown)=>{
+    if(!joined||!isHost||!joined.live)return;
+    try{
+      limit('tracking:'+socket.id,90,60000);
+      const frame=z.object({candidates:z.array(candidateSchema).max(5),width:z.number().positive().max(4096),height:z.number().positive().max(4096)}).parse(data);
+      io.to(joined.code).emit('tracking',{...frame,at:Date.now()});
     }catch{}
   });
   socket.on('reaction',(emoji:string)=>{

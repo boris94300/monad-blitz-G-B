@@ -39,7 +39,7 @@ test('seller broadcasts, two phones join, one winner, outsider cannot control ro
 });
 test('home works at desktop and mobile widths with no horizontal overflow',async({page})=>{
   await page.setViewportSize({width:1440,height:1000});await page.goto('/');
-  await expect(page.getByRole('heading',{name:/Tout doit/})).toBeVisible();
+  await expect(page.getByRole('heading',{name:/Le luxe de/})).toBeVisible();
   await page.screenshot({path:'test-results/home-desktop.png',fullPage:true});
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:'test-results/home-mobile.png',fullPage:true});
@@ -59,7 +59,7 @@ test('local vision model actually runs on the camera without any paid API',async
   await page.getByRole('button',{name:'Activer la caméra'}).click();
   await expect(page.getByText('EN DIRECT',{exact:true})).toBeVisible();
   const responsePromise=page.waitForResponse(r=>r.url().endsWith(`/api/rooms/${room.code}/scan`),{timeout:90000});
-  await page.getByRole('button',{name:'Prochaine victime'}).click();
+  await page.getByRole('button',{name:'Sélectionner jusqu’à 5 objets'}).click();
   const response=await responsePromise;
   const input=response.request().postDataJSON();
   expect(input.source).toBe('local');expect(Array.isArray(input.candidates)).toBeTruthy();
@@ -81,8 +81,8 @@ test('phone is the camera while the PC remains the authorized auction host',asyn
   const cameraContext=await browser.newContext({permissions:['camera'],viewport:{width:390,height:844}});const camera=await cameraContext.newPage();await camera.goto(`/camera/${room.code}#${cameraToken}`);
   await camera.getByRole('button',{name:'Démarrer la caméra du téléphone'}).click();
   await expect(host.getByText('CAMÉRA DU TÉLÉPHONE',{exact:true})).toBeVisible();
-  await expect(host.getByRole('button',{name:'Prochaine victime'})).toBeEnabled();
-  const scan=host.waitForResponse(r=>r.url().endsWith(`/api/rooms/${room.code}/scan`),{timeout:45000});await host.getByRole('button',{name:'Prochaine victime'}).click();
+  await expect(host.getByRole('button',{name:'Sélectionner jusqu’à 5 objets'})).toBeEnabled();
+  const scan=host.waitForResponse(r=>r.url().endsWith(`/api/rooms/${room.code}/scan`),{timeout:45000});await host.getByRole('button',{name:'Sélectionner jusqu’à 5 objets'}).click();
   const response=await scan;expect(response.request().postDataJSON().source).toBe('local');
   if(response.status()===400)expect((await response.json()).error).toContain('Aucune cible reconnue');else expect(response.ok()).toBeTruthy();
   await host.getByRole('button',{name:'Couper le téléphone'}).click();await expect(camera.getByText('CAMÉRA ÉTEINTE',{exact:true})).toBeVisible();

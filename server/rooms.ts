@@ -1,20 +1,21 @@
 import {randomBytes, randomInt, randomUUID} from 'node:crypto';
 import type {Candidate, Lot, Room} from '../lib/types';
 import {priceAt} from '../lib/auction';
+export {selectCandidates} from '../lib/selection';
 
 export type InternalRoom = Room & {hostToken: string; cameraToken: string; hostSocket?: string; cameraSocket?:string; sourceSocket?:string; peers: Set<string>; lastFrame?: string; busy: boolean; lastScan: number; lastTouched: number};
 export const rooms = new Map<string, InternalRoom>();
 export function createRoom(name: string, mode: Room['mode']) {
   const code = randomBytes(4).toString('hex').toUpperCase();
   const room: InternalRoom = {code, name, mode, hostToken:randomBytes(32).toString('hex'),cameraToken:randomBytes(32).toString('hex'),videoSource:null,
-    viewers:0, live:false, createdAt:Date.now(), serverTime:Date.now(), active:null,
-    history:[], peers:new Set(), busy:false, lastScan:0, lastTouched:Date.now(), chainHealthy:true};
+    viewers:0, live:false, createdAt:Date.now(), serverTime:Date.now(), active:null,lots:[],
+    history:[],salesCount:0,volume:0, peers:new Set(), busy:false, lastScan:0, lastTouched:Date.now(), chainHealthy:true};
   rooms.set(code, room); return room;
 }
 export function publicRoom(room: InternalRoom): Room {
   return {code:room.code, name:room.name, mode:room.mode, viewers:room.peers.size,
-    live:room.live, createdAt:room.createdAt, active:room.active,
-    history:room.history.slice(-12), serverTime:Date.now(), chainHealthy:room.chainHealthy,videoSource:room.videoSource};
+    live:room.live, createdAt:room.createdAt, active:room.active,lots:room.lots,
+    history:room.history.slice(-12),salesCount:room.salesCount,volume:room.volume, serverTime:Date.now(), chainHealthy:room.chainHealthy,videoSource:room.videoSource};
 }
 export function selectCandidate(candidates: Candidate[], includePeople: boolean) {
   const eligible = candidates.filter(c => c.confidence >= .45 && (includePeople || !c.person));
@@ -44,18 +45,19 @@ const catalogue: Record<string, [string,string,string,string]> = {
 export function makeLot(candidate: Candidate, image: string, mode: Room['mode'], source: Lot['source'] = 'local'): Lot {
   const entry = catalogue[candidate.label] ?? [candidate.label, `${candidate.label} de prestige intergalactique`, 'Une pièce si rare que notre expert vient d’apprendre son existence.', 'Collectionneur de l’inexplicable'];
   const estimate = mode === 'chain' ? randomInt(10,31)/1000 : randomInt(8,26);
-  return {id:randomUUID(), label:entry[0], name:entry[1], description:entry[2], title:entry[3],
+  return {id:randomUUID(), detectionLabel:candidate.label, label:entry[0], name:entry[1], description:entry[2], title:entry[3],
     traits:[`Prestige cosmique : ${randomInt(76,101)}/100`, `Utilité discutable : ${randomInt(1,10)}/10`, 'Authenticité : probablement'],
     person:candidate.person, bbox:candidate.bbox, image,
     estimatedPrice:estimate, startPrice:Number((estimate*2.5).toFixed(6)), floorPrice:Number((estimate*.15).toFixed(6)),
     duration:60, startTime:0, status:'preview', source};
 }
-export function sellDemo(room: InternalRoom, buyer: string) {
+export function sellDemo(room: InternalRoom, buyer: string, lotId?:string) {
   if (room.mode !== 'demo') throw new Error('Les achats de cette salle doivent être confirmés sur Monad.');
-  const lot = room.active;
+  const lot = lotId ? room.lots.find(l=>l.id===lotId) : room.active;
   if (!lot || lot.status !== 'active') throw new Error('Ce lot n’est plus disponible.');
   const price = priceAt(lot);
   lot.status = 'sold'; lot.buyer = buyer; lot.soldPrice = price;
+  room.salesCount++;room.volume+=price;
   room.history.push({...lot}); room.history = room.history.slice(-12);
   return lot;
 }
