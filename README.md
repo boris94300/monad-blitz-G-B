@@ -130,12 +130,12 @@ Une mise en vente nécessite aussi une transaction. La nouveauté revendiquée e
 ## Interface Maison de vente et vision multi-objets
 
 - Thème clair épuré, sélection compacte à droite du live et vignettes recadrées. Sur mobile la sélection défile horizontalement sous la vidéo.
-- Cinq prix indépendants descendent simultanément. Le volume et le nombre d’acquisitions viennent uniquement des achats de la salle (explicitement simulés en répétition).
+- Sept prix indépendants descendent simultanément. Le volume et le nombre d’acquisitions viennent uniquement des achats de la salle (explicitement simulés en répétition).
 - Repérage local périodique : une analyse à la fois, dans un worker séparé, relancée 180 ms après chaque inférence. Une passe sur deux réanalyse aussi les zones des petits lots sélectionnés. Les cadres suivent les nouvelles détections par catégorie ; ils ne garantissent pas l’identité persistante de deux objets semblables. Les cadres obsolètes disparaissent après 4,5 secondes.
 - Les humains sont exclus par défaut ; activer « Inclure les personnages consentants » pour une carte fictive.
 - COCO-SSD reste limité à ses 80 catégories. Les écouteurs, mouchoirs et miettes ne sont pas garantis. « Cadrer un petit objet » permet de dessiner une zone sur une capture et de nommer ce détail ; le lot est explicitement marqué cadrage manuel. Ce détail manuel n’est pas suivi automatiquement en vidéo.
 - Le modèle local et le cadrage manuel fonctionnent sans clé API. La vision distante optionnelle privilégie désormais les petits objets et une image haute définition, mais nécessite une configuration séparée.
-- Les tests navigateur vérifient cinq lots, deux achats distincts, les doublons, les cadres synchronisés et leur expiration, le cadrage manuel, la caméra séparée et le rendu mobile. Les scènes de test sont synthétiques, pas une mesure de précision sur de vrais petits objets.
+- Les tests navigateur vérifient sept lots, deux achats distincts, les doublons, les cadres synchronisés et leur expiration, le cadrage manuel, la caméra séparée et le rendu mobile. Les scènes de test sont synthétiques, pas une mesure de précision sur de vrais petits objets.
 
 ## Vue acheteur épurée, vidéo et mascotte
 
