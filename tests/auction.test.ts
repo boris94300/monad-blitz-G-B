@@ -45,3 +45,12 @@ test('public state never includes host secret or peers',()=>{
   const room=createRoom('Test','demo');const state=publicRoom(room);
   assert.ok(!('hostToken' in state));assert.ok(!('cameraToken' in state));assert.ok(!('hostSocket' in state));assert.ok(!('peers' in state));
 });
+
+import {stabilize,trackingColor} from '../lib/tracking';
+test('tracking bridges brief missed detections, smooths motion, then clears stale boxes',()=>{
+  const memory=new Map();const c={label:'cup',person:false,confidence:.9,bbox:[.1,.1,.2,.2] as [number,number,number,number]};
+  stabilize(memory,[c],1000,false);assert.equal(stabilize(memory,[],1400,false).length,1);
+  const moved=stabilize(memory,[{...c,bbox:[.2,.1,.2,.2]}],1500,false);assert.ok(moved[0].bbox[0]>.1&&moved[0].bbox[0]<.2);
+  assert.equal(stabilize(memory,[],2600,false).length,0);
+  assert.notEqual(trackingColor('cup',[{label:'cup'},{label:'bottle'}]),trackingColor('bottle',[{label:'cup'},{label:'bottle'}]));
+});

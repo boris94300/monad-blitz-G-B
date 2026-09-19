@@ -17,16 +17,19 @@ test('seller broadcasts, two phones join, one winner, outsider cannot control ro
   await backupContext.addInitScript(()=>{Object.defineProperty(window,'RTCPeerConnection',{value:class{constructor(){throw new Error('WebRTC bloqué pour vérifier le secours');}}});});
   const backup=await backupContext.newPage();await backup.goto(`/join/${room.code}`);
   await expect(backup.locator('.live-image')).toBeVisible();
-  await expect(backup.getByText('DIRECT · DÉBIT RÉDUIT',{exact:true})).toBeVisible();
+  await expect(backup.locator('.live-image')).toBeVisible();
+  const frames=await backup.evaluate(()=>new Promise<number>(resolve=>{
+    let count=0;const image=document.querySelector('.live-image')!;const observer=new MutationObserver(()=>count++);observer.observe(image,{attributes:true,attributeFilter:['src']});setTimeout(()=>{observer.disconnect();resolve(count);},1600);
+  }));expect(frames).toBeGreaterThanOrEqual(8);
   await host.getByRole('button',{name:'Essayer avec un décor fictif'}).click();
   await expect(host.getByRole('heading',{name:'Trône du stagiaire suprême'})).toBeVisible();
   await host.getByRole('button',{name:'Lancer l’enchère'}).click();
-  await expect(buyer.getByRole('button',{name:'Je craque · achat simulé'})).toBeEnabled();
+  await expect(buyer.locator('.mobile-buy-dock button')).toBeEnabled();
   await buyer.getByLabel('Votre nom de collectionneur').fill('Alice du chaos');
   await buyer.screenshot({path:'test-results/mobile-live.png',fullPage:true});
   await host.screenshot({path:'test-results/host-live.png',fullPage:true});
   const before=await (await request.get(`/api/rooms/${room.code}`)).json();
-  await buyer.getByRole('button',{name:'Je craque · achat simulé'}).click();
+  await buyer.locator('.mobile-buy-dock button').click();
   await expect(buyer.getByText('ADJUGÉ À ALICE DU CHAOS')).toBeVisible();
   await expect(host.getByText('ADJUGÉ À ALICE DU CHAOS')).toBeVisible();
   await expect(backup.getByText('ADJUGÉ À ALICE DU CHAOS')).toBeVisible();

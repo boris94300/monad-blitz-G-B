@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
 import type {Lot,TrackingFrame} from '@/lib/types';
+import {trackingColor} from '@/lib/tracking';
 import {priceAt,formatMon} from '@/lib/auction';
 
 export function LotThumbnail({lot}:{lot:Lot}){
@@ -25,7 +26,7 @@ export function LiveSelection({frame,lots,now,onSelect}:{frame:TrackingFrame|nul
   return <div ref={ref} className="recognition-overlay" aria-label="Repérage des objets en direct">
     {fresh&&<div className="recognition-plane" style={{width:w,height:h,left:(size.w-w)/2,top:(size.h-h)/2}}>{frame.candidates.map((c,i)=>{
       const lot=lots.find(l=>(l.detectionLabel||l.label)===c.label);
-      return <button key={c.label} className={`recognition-box ${lot?.status==='sold'?'is-sold':''}`} disabled={!lot||!onSelect} onClick={()=>lot&&onSelect?.(lot.id)} aria-label={`Repérer ${lot?.label||c.label}`} style={{left:`${c.bbox[0]*100}%`,top:`${c.bbox[1]*100}%`,width:`${Math.min(c.bbox[2],1-c.bbox[0])*100}%`,height:`${Math.min(c.bbox[3],1-c.bbox[1])*100}%`}}><span className="recognition-label"><b>{String(i+1).padStart(2,'0')}</b> {lot?.label||c.label}{lot&&<em>{lot.status==='sold'?'ADJUGÉ':`${formatMon(priceAt(lot,now))} MON`}</em>}</span><span className="recognition-confidence">{Math.round(c.confidence*100)} %</span></button>;
+      return <button key={c.label} className={`recognition-box ${lot?.status==='sold'?'is-sold':''}`} disabled={!lot||!onSelect} onClick={()=>lot&&onSelect?.(lot.id)} aria-label={`Repérer ${lot?.label||c.label}`} style={{'--target-color':trackingColor(c.label,lots),left:`${c.bbox[0]*100}%`,top:`${c.bbox[1]*100}%`,width:`${Math.min(c.bbox[2],1-c.bbox[0])*100}%`,height:`${Math.min(c.bbox[3],1-c.bbox[1])*100}%`} as React.CSSProperties}><span className="recognition-label"><b>{String(i+1).padStart(2,'0')}</b> {lot?.label||c.label}{lot&&<em>{lot.status==='sold'?'ADJUGÉ':`${formatMon(priceAt(lot,now))} MON`}</em>}</span><span className="recognition-confidence">{Math.round(c.confidence*100)} %</span></button>;
     })}</div>}
   </div>;
 }

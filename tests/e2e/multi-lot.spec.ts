@@ -16,8 +16,10 @@ test('five cropped lots descend together; independent buyers purchase different 
   const priceBefore=await buyer.locator('.rail-price').nth(0).innerText();
   await expect.poll(async()=>buyer.locator('.rail-price').nth(0).innerText()).not.toBe(priceBefore);
   expect(await buyer.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
-  await buyer.getByRole('button',{name:'Je craque · achat simulé',exact:true}).click();
+  await buyer.locator('.mobile-buy-dock button').click();
   await expect(buyer.getByText('ADJUGÉ À COMTESSE DU BISCUIT',{exact:true})).toBeVisible();
+  await expect(buyer.locator('.sale-celebration')).toBeVisible();
+  await expect(buyer.locator('.sale-celebration')).toContainText('Élixir');
   const purchase=await request.post(`/api/rooms/${room.code}/buy`,{data:{lotId:first.lots[3].id,buyer:'Baron du silence'}});expect(purchase.ok()).toBeTruthy();
   const final=await purchase.json();expect(final.lots.filter((l:{status:string})=>l.status==='active')).toHaveLength(3);expect(final.history).toHaveLength(2);
   const duplicate=await request.post(`/api/rooms/${room.code}/buy`,{data:{lotId:first.lots[1].id,buyer:'Trop tard'}});expect(duplicate.status()).toBe(400);

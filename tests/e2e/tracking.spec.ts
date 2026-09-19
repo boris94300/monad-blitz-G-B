@@ -9,14 +9,15 @@ test('live boxes align with the video, are shared with viewers and expire when s
     await expect(page.getByText('EN DIRECT',{exact:true})).toBeVisible();
     const image=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=800;c.height=600;const ctx=c.getContext('2d')!;ctx.fillStyle='#433e30';ctx.fillRect(0,0,800,600);ctx.fillStyle='#d9bd82';ctx.fillRect(200,150,200,200);return c.toDataURL('image/jpeg');});
     socket.emit('frame',image);
-    const frame={width:800,height:600,candidates:[{label:'cup',confidence:.95,person:false,bbox:[.25,.25,.25,1/3]}]};
+    const frame={width:800,height:600,candidates:[{label:'cup',confidence:.95,person:false,bbox:[.25,.25,.25,1/3]},{label:'bottle',confidence:.96,person:false,bbox:[.65,.25,.15,.4]}]};
     socket.emit('tracking',frame);
-    const box=page.locator('.recognition-box');await expect(box).toBeVisible();
+    const boxes=page.locator('.recognition-box');await expect(boxes).toHaveCount(2);const box=boxes.first();await expect(box).toBeVisible();
+    const colors=await boxes.evaluateAll(elements=>elements.map(e=>getComputedStyle(e).borderTopColor));expect(colors[0]).not.toBe(colors[1]);
     const plane=await page.locator('.recognition-plane').boundingBox(),b=await box.boundingBox();
     expect(Math.abs(b!.x-(plane!.x+plane!.width*.25))).toBeLessThan(2);
     expect(Math.abs(b!.y-(plane!.y+plane!.height*.25))).toBeLessThan(2);
     await page.screenshot({path:'test-results/luxury-live-tracking.png'});
-    await expect(box).toHaveCount(0,{timeout:8000});
+    await expect(boxes).toHaveCount(0,{timeout:8000});
     socket.emit('live',false);
   }finally{socket.disconnect();}
 });

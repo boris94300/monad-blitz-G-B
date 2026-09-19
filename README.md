@@ -80,7 +80,7 @@ Le navigateur affiche une interpolation avec l’heure serveur ; **le contrat fa
 - Next.js App Router + React + TypeScript : accueil, régie, participant, projection, déploiement.
 - Serveur Node/Express + Socket.IO : salles, autorisation vendeur, sélection de cinq catégories, état, réactions, signalisation vidéo.
 - WebRTC : diffusion pair à pair du vendeur aux spectateurs, audio facultatif.
-- Secours JPEG : 4 images/seconde, sans audio, si WebRTC ne passe pas. Le mode est indiqué à l’écran. Les images périmées disparaissent.
+- Secours JPEG : cible de 12 images/seconde en 480 px, sans audio, si WebRTC ne passe pas. Les images périmées disparaissent.
 - TensorFlow.js/COCO-SSD : détection locale ; catalogue humoristique et prix fictifs calculés localement côté serveur.
 - Solidity + viem : transactions Monad Testnet.
 
@@ -129,10 +129,22 @@ Une mise en vente nécessite aussi une transaction. La nouveauté revendiquée e
 
 ## Interface Maison de vente et vision multi-objets
 
-- Thème noir, ivoire et or, sélection défilante à droite du live et vignettes recadrées. Sur mobile la sélection suit immédiatement la vidéo.
+- Thème clair épuré, sélection compacte à droite du live et vignettes recadrées. Sur mobile la sélection défile horizontalement sous la vidéo.
 - Cinq prix indépendants descendent simultanément. Le volume et le nombre d’acquisitions viennent uniquement des achats de la salle (explicitement simulés en répétition).
-- Repérage local périodique : une analyse à la fois, environ toutes les deux secondes plus le temps d’inférence. Une passe sur trois analyse aussi les zones agrandies. Les cadres suivent les nouvelles détections par catégorie ; ils ne garantissent pas l’identité persistante de deux objets semblables. Les cadres obsolètes disparaissent après 4,5 secondes.
+- Repérage local périodique : une analyse à la fois, dans un worker séparé, relancée 180 ms après chaque inférence. Une passe sur deux réanalyse aussi les zones des petits lots sélectionnés. Les cadres suivent les nouvelles détections par catégorie ; ils ne garantissent pas l’identité persistante de deux objets semblables. Les cadres obsolètes disparaissent après 4,5 secondes.
 - Les humains sont exclus par défaut ; activer « Inclure les personnages consentants » pour une carte fictive.
 - COCO-SSD reste limité à ses 80 catégories. Les écouteurs, mouchoirs et miettes ne sont pas garantis. « Cadrer un petit objet » permet de dessiner une zone sur une capture et de nommer ce détail ; le lot est explicitement marqué cadrage manuel. Ce détail manuel n’est pas suivi automatiquement en vidéo.
 - Le modèle local et le cadrage manuel fonctionnent sans clé API. La vision distante optionnelle privilégie désormais les petits objets et une image haute définition, mais nécessite une configuration séparée.
 - Les tests navigateur vérifient cinq lots, deux achats distincts, les doublons, les cadres synchronisés et leur expiration, le cadrage manuel, la caméra séparée et le rendu mobile. Les scènes de test sont synthétiques, pas une mesure de précision sur de vrais petits objets.
+
+## Vue acheteur épurée, vidéo et mascotte
+
+La vue acheteur montre le live, une sélection compacte et un bouton d’achat principal. Les détails de régie, les réactions, les statistiques et le QR sont masqués. Sur téléphone les objets défilent horizontalement et le bouton d’achat reste en bas.
+
+La caméra demande désormais 30 images/s en WebRTC, privilégie la cadence et limite le débit par connexion. Le mode de secours JPEG vise 12 images/s en 480 px, contre 4 auparavant ; son débit réel dépend du réseau. Les images de secours ne provoquent pas de rendu React lorsque la vidéo directe fonctionne. Une connexion figée bascule vers le secours et demande une renégociation. Aucun serveur TURN n’a été ajouté : les réseaux restrictifs peuvent encore utiliser le secours.
+
+Le repérage recommence 180 ms après chaque inférence ; les petites régions sélectionnées sont également réanalysées une passe sur deux. Le mouvement des cadres est lissé, les détections manquantes sont conservées au maximum une seconde, et les cadres périmés disparaissent. Les couleurs sont stables par catégorie sélectionnée. Cela reste une reconnaissance périodique, pas une garantie de suivi image par image ni de reconnaissance des détails hors des 80 classes du modèle.
+
+Une mascotte vectorielle animée (style guignol, chapeau et marteau) célèbre chaque nouvelle vente confirmée. Les ventes simultanées sont mises en file ; les ventes historiques ne rejouent pas à l’arrivée. L’animation respecte la préférence de réduction des mouvements, ne bloque aucun bouton et ne nécessite pas de télécharger un GIF.
+
+La reconnaissance est exécutée dans un Web Worker avec OffscreenCanvas : le chargement et le calcul du modèle ne bloquent plus le fil d’affichage ou l’encodage des images de secours. Le test de fluidité vérifie la réception d’au moins huit changements d’image sur 1,6 seconde pendant que le modèle se charge, en plus des essais de reconnaissance réelle. Les fontes sont locales au système, sans téléchargement Google Fonts.

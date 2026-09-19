@@ -195,7 +195,7 @@ io.on('connection',socket=>{
     publish(joined);
   });
   socket.on('frame',(image:unknown)=>{
-    if(!joined||joined.sourceSocket!==socket.id||!joined.live||Date.now()-lastFrameAt<200||typeof image!=='string'||image.length>170000||!image.startsWith('data:image/jpeg;base64,')) return;
+    if(!joined||joined.sourceSocket!==socket.id||!joined.live||Date.now()-lastFrameAt<65||typeof image!=='string'||image.length>170000||!image.startsWith('data:image/jpeg;base64,')) return;
     lastFrameAt=Date.now();joined.lastFrame=image;
     socket.to(joined.code).volatile.emit('frame',{image,at:Date.now()});
   });
@@ -209,10 +209,14 @@ io.on('connection',socket=>{
       if(allowed) io.to(to).emit('signal',{from:socket.id,payload});
     }catch{}
   });
+  socket.on('request-live',()=>{
+    if(!joined||!joined.live||!joined.sourceSocket||joined.sourceSocket===socket.id)return;
+    try{limit('retry:'+socket.id,10,60000);io.to(joined.sourceSocket).emit('viewer',socket.id);}catch{}
+  });
   socket.on('tracking',(data:unknown)=>{
     if(!joined||!isHost||!joined.live)return;
     try{
-      limit('tracking:'+socket.id,90,60000);
+      limit('tracking:'+socket.id,600,60000);
       const frame=z.object({candidates:z.array(candidateSchema).max(5),width:z.number().positive().max(4096),height:z.number().positive().max(4096)}).parse(data);
       io.to(joined.code).emit('tracking',{...frame,at:Date.now()});
     }catch{}
