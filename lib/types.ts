@@ -1,6 +1,8 @@
 export type Candidate = {
   label: string; confidence: number; bbox: [number, number, number, number];
   person: boolean;
+  /** Neutral clothing description of a person (colours, accessories, position), never physical traits. */
+  appearance?: string;
 };
 export type Lot = {
   id: string; detectionLabel?: string; name: string; label: string; description: string; title: string;
@@ -8,11 +10,13 @@ export type Lot = {
   estimatedPrice: number; startPrice: number; floorPrice: number; duration: number;
   startTime: number; status: 'preview' | 'active' | 'sold';
   buyer?: string; soldPrice?: number; chainId?: string; txHash?: string;
-  source: 'vision' | 'local' | 'rehearsal' | 'manual';
+  source: 'vision' | 'local' | 'rehearsal' | 'manual' | 'absurd';
+  /** Fictional character score out of 10 and the short reason behind its price (people only). */
+  rating?: number; ratingReason?: string; appearance?: string;
 };
 export type Room = {
   code: string; name: string; mode: 'demo' | 'chain'; viewers: number;
-  live: boolean; createdAt: number; active: Lot | null; lots: Lot[]; history: Lot[]; salesCount:number; volume:number;
+  live: boolean; peopleOnly: boolean; createdAt: number; active: Lot | null; lots: Lot[]; history: Lot[]; salesCount:number; volume:number;
   serverTime: number; chainHealthy: boolean; videoSource: 'host' | 'phone' | null;
 };
 export type Config = {

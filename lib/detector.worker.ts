@@ -1,4 +1,5 @@
 import type {Candidate} from './types';
+import {MAX_LOTS} from './selection';
 let detector: Promise<import('@tensorflow-models/coco-ssd').ObjectDetection>|null=null;
 let queue:Promise<unknown>=Promise.resolve();
 async function run(snapshot:OffscreenCanvas,detailed:boolean,focus:Candidate['bbox'][]):Promise<Candidate[]> {
@@ -9,7 +10,7 @@ async function run(snapshot:OffscreenCanvas,detailed:boolean,focus:Candidate['bb
   const model=await detector;
   const regions:number[][]=[[0,0,1,1]];
   if(detailed)regions.push([0,0,.6,.6],[.4,0,.6,.6],[0,.4,.6,.6],[.4,.4,.6,.6],[.2,.2,.6,.6]);
-  else for(const [x,y,w,h] of focus.slice(0,5)){
+  else for(const [x,y,w,h] of focus.slice(0,MAX_LOTS)){
     if(w*h>.3)continue;
     const left=Math.max(0,x-w*.5),top=Math.max(0,y-h*.5);
     regions.push([left,top,Math.min(1-left,Math.max(.15,w*2)),Math.min(1-top,Math.max(.15,h*2))]);

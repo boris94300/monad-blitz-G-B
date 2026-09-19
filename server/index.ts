@@ -7,7 +7,8 @@ import next from 'next';
 import {z} from 'zod';
 import {createPublicClient, http, isAddress, parseEventLogs, formatEther, parseEther} from 'viem';
 import {auctionAbi, monadTestnet} from '../lib/chain';
-import {rooms,createRoom,publicRoom,selectCandidates,makeLot,sellDemo} from './rooms';
+import {rooms,createRoom,publicRoom,selectCandidates,makeLot,sellDemo,replaceLot,absurdCandidates,ratingPrice,distinctNames} from './rooms';
+import {MAX_LOTS,selectPeople} from '../lib/selection';
 import type {InternalRoom} from './rooms';
 import {candidateSchema,scanVision} from './vision';
 import type {VisionCandidate} from './vision';
@@ -66,23 +67,26 @@ app.post('/api/rooms/:code/scan',async(req,res)=>{
   if(room.busy) throw new Error('L’expert réfléchit déjà.');
   if(room.lots.some(l=>l.status==='active')) throw new Error('Vendez le lot en cours avant de changer de cible.');
   if(Date.now()-room.lastScan<2500) throw new Error('Laissez deux secondes à notre expert.');
-  const body=z.object({image:imageSchema,candidates:z.array(candidateSchema).max(150).optional(),includePeople:z.boolean().default(false),source:z.enum(['local','vision','rehearsal']),duration:z.number().int().min(15).max(180).default(60)}).parse(req.body);
+  const body=z.object({image:imageSchema,candidates:z.array(candidateSchema).max(150).optional(),includePeople:z.boolean().default(false),peopleOnly:z.boolean().default(false),source:z.enum(['local','vision','rehearsal']),duration:z.number().int().min(15).max(180).default(60)}).parse(req.body);
   if(body.source==='rehearsal'&&room.mode!=='demo') throw new Error('Les objets de répétition sont réservés aux salles de répétition.');
   room.busy=true;room.lastScan=Date.now();
   try {
-    const candidates:Candidate[]=body.source==='vision' ? await scanVision(body.image,body.includePeople) : body.candidates || [];
-    const selected=selectCandidates(candidates,body.includePeople);
-    if(!selected.length)throw new Error('Aucune cible reconnue. Rapprochez-vous d’un objet bien éclairé et réessayez.');
-    const lots=selected.map(chosen=>{
+    const candidates:Candidate[]=body.source==='vision' ? await scanVision(body.image,body.includePeople||body.peopleOnly,body.peopleOnly) : body.candidates || [];
+    // People-only mode auctions every visible person as a fictional character, and nothing else.
+    const selected=body.peopleOnly?selectPeople(candidates):selectCandidates(candidates,body.includePeople);
+    if(body.peopleOnly&&!selected.length)throw new Error('Aucune personne repérée. Placez les volontaires bien en vue et réessayez.');
+    // Otherwise the selection is always complete: absurd materials (air, wall, ceiling…) fill the missing slots.
+    const fillers=body.peopleOnly?[]:absurdCandidates(selected,MAX_LOTS-selected.length).map(c=>{const lot=makeLot(c,body.image,room.mode,'absurd');lot.duration=body.duration;return lot;});
+    const lots=[...selected.map(chosen=>{
     const lot=makeLot(chosen,body.image,room.mode,body.source);lot.duration=body.duration;
     if(body.source==='vision') {
       const enriched=chosen as VisionCandidate;
-      Object.assign(lot,{name:enriched.name,description:enriched.description,title:enriched.title,traits:enriched.traits});
-      lot.estimatedPrice=room.mode==='chain'?enriched.estimatedPrice:enriched.estimatedPrice*1000;
+      Object.assign(lot,{name:enriched.name,description:enriched.description,title:enriched.title,traits:enriched.traits,rating:enriched.rating,ratingReason:enriched.ratingReason});
+      lot.estimatedPrice=chosen.person?ratingPrice(room.mode,enriched.rating):room.mode==='chain'?enriched.estimatedPrice:enriched.estimatedPrice*1000;
       lot.startPrice=Number((lot.estimatedPrice*2.5).toFixed(6));lot.floorPrice=Number((lot.estimatedPrice*.15).toFixed(6));
     }
-    return lot;});
-    room.lots=lots;room.active=lots[0];publish(room);res.json({lot:lots[0],lots,count:lots.length});
+    return lot;}),...fillers];
+    room.lots=distinctNames(lots);room.active=lots[0];room.peopleOnly=body.peopleOnly;publish(room);res.json({lot:lots[0],lots,count:lots.length});
   } finally {room.busy=false;}
 });
 app.post('/api/rooms/:code/detail',(req,res)=>{
@@ -90,10 +94,20 @@ app.post('/api/rooms/:code/detail',(req,res)=>{
   if(room.busy||room.lots.some(l=>l.status==='active'))throw new Error('Terminez la vente en cours avant de modifier la sélection.');
   const body=z.object({image:imageSchema,candidate:candidateSchema,duration:z.number().int().min(15).max(180)}).parse(req.body);
   const current=room.lots.filter(l=>l.status==='preview');
-  if(current.length>=5)throw new Error('La sélection contient déjà cinq objets.');
   if(current.some(l=>(l.detectionLabel||l.label).toLowerCase()===body.candidate.label.toLowerCase()))throw new Error('Cette catégorie est déjà présente.');
   const lot=makeLot(body.candidate,body.image,room.mode,'manual');lot.duration=body.duration;
-  room.lots=[...current,lot];room.active=room.lots[0];publish(room);res.json(publicRoom(room));
+  // A framed detail takes the place of an absurd material when the selection is full.
+  const absurd=current.findLastIndex(l=>l.source==='absurd');
+  if(current.length>=MAX_LOTS&&absurd<0)throw new Error(`La sélection contient déjà ${MAX_LOTS} objets.`);
+  room.lots=current.length>=MAX_LOTS?current.map((l,i)=>i===absurd?lot:l):[...current,lot];room.active=room.lots[0];publish(room);res.json(publicRoom(room));
+});
+app.post('/api/rooms/:code/replace',(req,res)=>{
+  const room=host(req);
+  if(room.busy)throw new Error('Opération déjà en cours.');
+  if(!room.live)throw new Error('Activez une caméra avant de suivre les objets.');
+  const body=z.object({lotId:z.string().uuid().optional(),candidate:candidateSchema.optional(),image:imageSchema,includePeople:z.boolean().default(false)}).parse(req.body);
+  if(body.candidate&&!(room.peopleOnly?selectPeople([body.candidate]):selectCandidates([body.candidate],body.includePeople)).length)throw new Error('Cette cible ne peut pas être sélectionnée.');
+  replaceLot(room,body.lotId,body.candidate,body.image);publish(room);res.json(publicRoom(room));
 });
 app.post('/api/rooms/:code/start',async(req,res)=>{
   const room=host(req),lots=room.lots.filter(l=>l.status==='preview');
@@ -217,7 +231,7 @@ io.on('connection',socket=>{
     if(!joined||!isHost||!joined.live)return;
     try{
       limit('tracking:'+socket.id,600,60000);
-      const frame=z.object({candidates:z.array(candidateSchema).max(5),width:z.number().positive().max(4096),height:z.number().positive().max(4096)}).parse(data);
+      const frame=z.object({candidates:z.array(candidateSchema).max(MAX_LOTS),width:z.number().positive().max(4096),height:z.number().positive().max(4096)}).parse(data);
       io.to(joined.code).emit('tracking',{...frame,at:Date.now()});
     }catch{}
   });

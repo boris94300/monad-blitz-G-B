@@ -29,7 +29,7 @@ Le build télécharge environ 19 Mo de poids publics COCO-SSD depuis TensorFlow 
 2. Activer la caméra (et, éventuellement, le micro avant le démarrage).
 3. Sur le PC de projection, ouvrir la **vue grand écran** `/scene/CODE`.
 4. Les acheteurs scannent le QR ou ouvrent `/join/CODE`.
-5. Cadrer des objets courants : chaise, tasse, bouteille, ordinateur, livre… Cliquer **Sélectionner jusqu’à 5 objets**. La capture et cinq zones agrandies sont analysées. Le serveur conserve une seule instance par catégorie, avec priorité aux petits objets et exclusion des meubles si leur contenu est reconnu.
+5. Cadrer des objets courants : chaise, tasse, bouteille, ordinateur, livre… Cliquer **Sélectionner 7 objets**. La capture et cinq zones agrandies sont analysées. Le serveur conserve une seule instance par catégorie, avec priorité aux petits objets et exclusion des meubles si leur contenu est reconnu. La sélection compte toujours sept lots : s’il manque des objets, des matériaux absurdes (parcelle d’air, pan de mur, morceau de plafond, ombre, poussière…) complètent la liste, placés à l’écart des vrais objets. Ensuite, un lot dont l’objet quitte l’écran plus de 2 s est remplacé sur place par un autre objet visible, ou à défaut par un matériau absurde ; un nouvel objet qui apparaît prend la place d’un matériau absurde. La case **Mode humains uniquement** ne sélectionne que les personnes consentantes (jusqu’à sept), chacune suivie individuellement comme personnage fictif. Chaque personnage reçoit une fiche inventée (charisme de réunion, énergie restante, talent caché…), une note sur 10 et une courte justification de son prix ; le prix dépend de la note. La note ne porte jamais sur le physique : corps, visage, cheveux, taille ou tout attribut sensible sont exclus.
 6. Le vendeur valide le lot avec **Lancer l’enchère**. Le public voit le même prix et le même gagnant.
 7. Après l’achat, le gagnant reçoit un titre absurde. Relancer un tour.
 
@@ -71,14 +71,14 @@ Ne jamais placer de clé privée ou de phrase de récupération dans le dépôt 
 - `buy` : le premier achat valide gagne. Le contrat marque le lot vendu avant les transferts, paie le vendeur et rembourse le trop-perçu. Une protection empêche les rappels pendant le paiement. Un transfert refusé annule toute la transaction.
 - `getItem` et `itemCount` : l’interface lit les lots. Un lot vendu conserve son prix d’achat.
 
-Le vendeur ne peut pas acheter son propre lot. Après la durée, un lot invendu reste achetable au plancher. L’interface autorise jusqu’à cinq lots simultanés par salle, inscrits dans une seule transaction. Chaque acheteur choisit un lot indépendamment. Il faut terminer les ventes actives avant une nouvelle sélection. Pas de mécanisme d’annulation dans ce prototype.
+Le vendeur ne peut pas acheter son propre lot. Après la durée, un lot invendu reste achetable au plancher. L’interface présente toujours sept lots simultanés par salle, inscrits dans une seule transaction. En répétition, un remplaçant rejoint la vente en cours avec sa propre courbe ; sur Monad, les lots inscrits ne changent pas pendant la vente. Chaque acheteur choisit un lot indépendamment. Il faut terminer les ventes actives avant une nouvelle sélection. Pas de mécanisme d’annulation dans ce prototype.
 
 Le navigateur affiche une interpolation avec l’heure serveur ; **le contrat fait autorité**. À l’achat, le client relit le prix sur Monad. Le serveur vérifie la transaction de création et lit l’état du contrat pour annoncer le gagnant. Un appel à l’API de répétition ne peut pas vendre un lot blockchain.
 
 ## Architecture et hébergement
 
 - Next.js App Router + React + TypeScript : accueil, régie, participant, projection, déploiement.
-- Serveur Node/Express + Socket.IO : salles, autorisation vendeur, sélection de cinq catégories, état, réactions, signalisation vidéo.
+- Serveur Node/Express + Socket.IO : salles, autorisation vendeur, sélection de sept catégories, remplacement des objets sortis du champ, état, réactions, signalisation vidéo.
 - WebRTC : diffusion pair à pair du vendeur aux spectateurs, audio facultatif.
 - Secours JPEG : cible de 12 images/seconde en 480 px, sans audio, si WebRTC ne passe pas. Les images périmées disparaissent.
 - TensorFlow.js/COCO-SSD : détection locale ; catalogue humoristique et prix fictifs calculés localement côté serveur.

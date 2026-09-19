@@ -62,14 +62,12 @@ test('local vision model actually runs on the camera without any paid API',async
   await page.getByRole('button',{name:'Activer la caméra'}).click();
   await expect(page.getByText('EN DIRECT',{exact:true})).toBeVisible();
   const responsePromise=page.waitForResponse(r=>r.url().endsWith(`/api/rooms/${room.code}/scan`),{timeout:90000});
-  await page.getByRole('button',{name:'Sélectionner jusqu’à 5 objets'}).click();
+  await page.getByRole('button',{name:'Sélectionner 7 objets'}).click();
   const response=await responsePromise;
   const input=response.request().postDataJSON();
   expect(input.source).toBe('local');expect(Array.isArray(input.candidates)).toBeTruthy();
-  // La caméra synthétique de Chromium n'est pas une photographie d'objet :
-  // une détection vide doit être une erreur explicite, jamais un faux résultat.
-  if(response.status()===400)expect((await response.json()).error).toContain('Aucune cible reconnue');
-  else expect(response.ok()).toBeTruthy();
+  // La caméra synthétique de Chromium ne montre aucun objet : la sélection est complétée par des matériaux absurdes.
+  expect(response.ok()).toBeTruthy();expect((await response.json()).count).toBe(7);
   await context.close();
 });
 
@@ -84,10 +82,10 @@ test('phone is the camera while the PC remains the authorized auction host',asyn
   const cameraContext=await browser.newContext({permissions:['camera'],viewport:{width:390,height:844}});const camera=await cameraContext.newPage();await camera.goto(`/camera/${room.code}#${cameraToken}`);
   await camera.getByRole('button',{name:'Démarrer la caméra du téléphone'}).click();
   await expect(host.getByText('CAMÉRA DU TÉLÉPHONE',{exact:true})).toBeVisible();
-  await expect(host.getByRole('button',{name:'Sélectionner jusqu’à 5 objets'})).toBeEnabled();
-  const scan=host.waitForResponse(r=>r.url().endsWith(`/api/rooms/${room.code}/scan`),{timeout:45000});await host.getByRole('button',{name:'Sélectionner jusqu’à 5 objets'}).click();
+  await expect(host.getByRole('button',{name:'Sélectionner 7 objets'})).toBeEnabled();
+  const scan=host.waitForResponse(r=>r.url().endsWith(`/api/rooms/${room.code}/scan`),{timeout:45000});await host.getByRole('button',{name:'Sélectionner 7 objets'}).click();
   const response=await scan;expect(response.request().postDataJSON().source).toBe('local');
-  if(response.status()===400)expect((await response.json()).error).toContain('Aucune cible reconnue');else expect(response.ok()).toBeTruthy();
+  expect(response.ok()).toBeTruthy();expect((await response.json()).count).toBe(7);
   await host.getByRole('button',{name:'Couper le téléphone'}).click();await expect(camera.getByText('CAMÉRA ÉTEINTE',{exact:true})).toBeVisible();
   await cameraContext.close();await hostContext.close();
 });

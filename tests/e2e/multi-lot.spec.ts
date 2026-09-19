@@ -1,14 +1,14 @@
 import {test,expect} from '@playwright/test';
-test('five cropped lots descend together; independent buyers purchase different lots',async({browser,request})=>{
+test('seven cropped lots (five objects, two absurd materials) descend together; independent buyers purchase different lots',async({browser,request})=>{
   const {room,hostToken}=await(await request.post('/api/rooms',{data:{name:'Le cabinet des curiosités',mode:'demo'}})).json();
   const hostContext=await browser.newContext();await hostContext.addInitScript(({code,token})=>localStorage.setItem(`host:${code}`,token),{code:room.code,token:hostToken});
   const host=await hostContext.newPage();await host.goto(`/host/${room.code}`);
   const image=await host.evaluate(()=>{const c=document.createElement('canvas');c.width=1000;c.height=700;const ctx=c.getContext('2d')!;ctx.fillStyle='#38362a';ctx.fillRect(0,0,1000,700);ctx.fillStyle='#665c42';ctx.fillRect(50,220,900,410);for(let i=0;i<5;i++){ctx.fillStyle=['#ded0ad','#96aa87','#d7b869','#956f4d','#4f6656'][i];ctx.fillRect(80+i*175,320,105,150);ctx.fillStyle='#ffffff';ctx.font='20px Arial';ctx.fillText(['TASSE','BOUTEILLE','BANANE','LIVRE','SOURIS'][i],80+i*175,495);}ctx.fillText('DÉCOR SYNTHÉTIQUE · TEST MULTI-LOTS',100,100);return c.toDataURL('image/jpeg');});
   const candidates=['cup','bottle','banana','book','mouse','cup','dining table'].map((label,i)=>({label,confidence:.97,person:false,bbox:i<5?[.08+i*.175,.45,.105,.23]:[0,0,.9,.9]}));
   const scan=await request.post(`/api/rooms/${room.code}/scan`,{headers:{Authorization:`Bearer ${hostToken}`},data:{image,candidates,includePeople:false,duration:60,source:'rehearsal'}});
-  expect(scan.ok()).toBeTruthy();expect((await scan.json()).count).toBe(5);
-  await expect(host.locator('.rail-item')).toHaveCount(5);await expect(host.locator('.rail-thumb canvas')).toHaveCount(5);
-  await host.getByRole('button',{name:'Lancer les 5 enchères'}).click();
+  expect(scan.ok()).toBeTruthy();expect((await scan.json()).count).toBe(7);
+  await expect(host.locator('.rail-item')).toHaveCount(7);await expect(host.locator('.rail-thumb canvas')).toHaveCount(7);
+  await host.getByRole('button',{name:'Lancer les 7 enchères'}).click();
   const first=await(await request.get(`/api/rooms/${room.code}`)).json();expect(first.lots.every((l:{status:string})=>l.status==='active')).toBeTruthy();
   expect(new Set(first.lots.map((l:{startTime:number})=>l.startTime)).size).toBe(1);
   const buyerContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const buyer=await buyerContext.newPage();await buyer.goto(`/join/${room.code}`);
@@ -21,7 +21,7 @@ test('five cropped lots descend together; independent buyers purchase different 
   await expect(buyer.locator('.sale-celebration')).toBeVisible();
   await expect(buyer.locator('.sale-celebration')).toContainText('Élixir');
   const purchase=await request.post(`/api/rooms/${room.code}/buy`,{data:{lotId:first.lots[3].id,buyer:'Baron du silence'}});expect(purchase.ok()).toBeTruthy();
-  const final=await purchase.json();expect(final.lots.filter((l:{status:string})=>l.status==='active')).toHaveLength(3);expect(final.history).toHaveLength(2);
+  const final=await purchase.json();expect(final.lots.filter((l:{status:string})=>l.status==='active')).toHaveLength(5);expect(final.lots.filter((l:{source:string})=>l.source==='absurd')).toHaveLength(2);expect(final.history).toHaveLength(2);
   const duplicate=await request.post(`/api/rooms/${room.code}/buy`,{data:{lotId:first.lots[1].id,buyer:'Trop tard'}});expect(duplicate.status()).toBe(400);
   const replace=await request.post(`/api/rooms/${room.code}/scan`,{headers:{Authorization:`Bearer ${hostToken}`},data:{image,candidates,source:'rehearsal'}});expect(replace.status()).toBe(400);
   await host.setViewportSize({width:1512,height:1000});await host.screenshot({path:'test-results/luxury-five-lots-desktop.png',fullPage:true});
