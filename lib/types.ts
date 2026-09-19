@@ -13,7 +13,7 @@ export type Lot = {
 export type Room = {
   code: string; name: string; mode: 'demo' | 'chain'; viewers: number;
   live: boolean; createdAt: number; active: Lot | null; history: Lot[];
-  serverTime: number; chainHealthy: boolean;
+  serverTime: number; chainHealthy: boolean; videoSource: 'host' | 'phone' | null;
 };
 export type Config = {
   vision: boolean; contractAddress: `0x${string}` | null; publicUrl: string;

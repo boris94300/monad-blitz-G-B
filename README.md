@@ -23,6 +23,8 @@ Le build télécharge environ 19 Mo de poids publics COCO-SSD depuis TensorFlow 
 
 ## Parcours de démonstration
 
+**Wallet sur le PC, caméra sur le téléphone :** créer la salle sur le PC, cliquer **Filmer avec mon téléphone**, puis scanner le QR caméra avec le téléphone vendeur. Celui-ci diffuse uniquement la vidéo et, au choix, le micro : aucun wallet n’y est nécessaire. Le PC reçoit le live, lance la reconnaissance et signe les mises en vente dans Rabby/MetaMask. Le QR caméra est distinct du QR public destiné aux acheteurs ; son jeton n’autorise ni la vente ni les commandes de régie.
+
 1. Sur le téléphone vendeur, ouvrir l’adresse HTTPS et créer une salle. L’accès vendeur est enregistré dans ce navigateur.
 2. Activer la caméra (et, éventuellement, le micro avant le démarrage).
 3. Sur le PC de projection, ouvrir la **vue grand écran** `/scene/CODE`.

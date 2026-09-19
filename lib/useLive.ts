@@ -29,7 +29,7 @@ export function useLive(socket:Socket|null,host:boolean,iceServers:RTCIceServer[
       pc.onicecandidate=e=>{if(e.candidate)socket.emit('signal',{to:id,payload:{candidate:e.candidate.toJSON()}});};
       pc.ontrack=e=>{setRemote(e.streams[0]||new MediaStream([e.track]));};
       pc.onconnectionstatechange=()=>{
-        if(!host)setRtcConnected(pc.connectionState==='connected');
+        setRtcConnected(pc.connectionState==='connected');
         if(pc.connectionState==='failed'){pc.close();peers.current.delete(id);}
       };
       if(host&&local.current)local.current.getTracks().forEach(t=>pc.addTrack(t,local.current!));
@@ -52,7 +52,7 @@ export function useLive(socket:Socket|null,host:boolean,iceServers:RTCIceServer[
           for(const c of pending.current.get(from)||[])await pc.addIceCandidate(c);pending.current.delete(from);
           if(payload.description.type==='offer'){await pc.setLocalDescription(await pc.createAnswer());socket.emit('signal',{to:from,payload:{description:pc.localDescription}});}
         }
-      }catch{if(!host)setRtcConnected(false);}
+      }catch{setRtcConnected(false);}
     };
     const onFrame=(data:{image:string;at:number})=>{setFrame(data.image);setFrameAt(Date.now());};
     const clearRemote=()=>{peers.current.forEach(p=>p.close());peers.current.clear();pending.current.clear();setRtcConnected(false);setRemote(null);setFrame('');};

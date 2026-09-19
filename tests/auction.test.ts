@@ -25,5 +25,5 @@ test('demo endpoint cannot sell a blockchain lot',()=>{
 });
 test('public state never includes host secret or peers',()=>{
   const room=createRoom('Test','demo');const state=publicRoom(room);
-  assert.ok(!('hostToken' in state));assert.ok(!('hostSocket' in state));assert.ok(!('peers' in state));
+  assert.ok(!('hostToken' in state));assert.ok(!('cameraToken' in state));assert.ok(!('hostSocket' in state));assert.ok(!('peers' in state));
 });

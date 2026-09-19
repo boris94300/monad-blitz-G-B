@@ -2,11 +2,11 @@ import {randomBytes, randomInt, randomUUID} from 'node:crypto';
 import type {Candidate, Lot, Room} from '../lib/types';
 import {priceAt} from '../lib/auction';
 
-export type InternalRoom = Room & {hostToken: string; hostSocket?: string; peers: Set<string>; lastFrame?: string; busy: boolean; lastScan: number; lastTouched: number};
+export type InternalRoom = Room & {hostToken: string; cameraToken: string; hostSocket?: string; cameraSocket?:string; sourceSocket?:string; peers: Set<string>; lastFrame?: string; busy: boolean; lastScan: number; lastTouched: number};
 export const rooms = new Map<string, InternalRoom>();
 export function createRoom(name: string, mode: Room['mode']) {
   const code = randomBytes(4).toString('hex').toUpperCase();
-  const room: InternalRoom = {code, name, mode, hostToken:randomBytes(32).toString('hex'),
+  const room: InternalRoom = {code, name, mode, hostToken:randomBytes(32).toString('hex'),cameraToken:randomBytes(32).toString('hex'),videoSource:null,
     viewers:0, live:false, createdAt:Date.now(), serverTime:Date.now(), active:null,
     history:[], peers:new Set(), busy:false, lastScan:0, lastTouched:Date.now(), chainHealthy:true};
   rooms.set(code, room); return room;
@@ -14,7 +14,7 @@ export function createRoom(name: string, mode: Room['mode']) {
 export function publicRoom(room: InternalRoom): Room {
   return {code:room.code, name:room.name, mode:room.mode, viewers:room.peers.size,
     live:room.live, createdAt:room.createdAt, active:room.active,
-    history:room.history.slice(-12), serverTime:Date.now(), chainHealthy:room.chainHealthy};
+    history:room.history.slice(-12), serverTime:Date.now(), chainHealthy:room.chainHealthy,videoSource:room.videoSource};
 }
 export function selectCandidate(candidates: Candidate[], includePeople: boolean) {
   const eligible = candidates.filter(c => c.confidence >= .45 && (includePeople || !c.person));

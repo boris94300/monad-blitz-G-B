@@ -69,3 +69,22 @@ test('local vision model actually runs on the camera without any paid API',async
   else expect(response.ok()).toBeTruthy();
   await context.close();
 });
+
+test('phone is the camera while the PC remains the authorized auction host',async({browser,request})=>{
+  const {room,hostToken}=await (await request.post('/api/rooms',{data:{name:'Téléphone caméra',mode:'demo'}})).json();
+  const denied=await request.get(`/api/rooms/${room.code}/camera-access`);expect(denied.status()).toBe(400);
+  const {cameraToken}=await (await request.get(`/api/rooms/${room.code}/camera-access`,{headers:{Authorization:`Bearer ${hostToken}`}})).json();
+  const cameraCannotSell=await request.post(`/api/rooms/${room.code}/start`,{headers:{Authorization:`Bearer ${cameraToken}`},data:{}});expect(cameraCannotSell.status()).toBe(400);
+  const hostContext=await browser.newContext();await hostContext.addInitScript(({code,token})=>localStorage.setItem(`host:${code}`,token),{code:room.code,token:hostToken});
+  const host=await hostContext.newPage();await host.goto(`/host/${room.code}`);
+  await host.getByRole('button',{name:'Filmer avec mon téléphone'}).click();await expect(host.getByRole('heading',{name:'Filmez depuis votre téléphone.'})).toBeVisible();
+  const cameraContext=await browser.newContext({permissions:['camera'],viewport:{width:390,height:844}});const camera=await cameraContext.newPage();await camera.goto(`/camera/${room.code}#${cameraToken}`);
+  await camera.getByRole('button',{name:'Démarrer la caméra du téléphone'}).click();
+  await expect(host.getByText('CAMÉRA DU TÉLÉPHONE',{exact:true})).toBeVisible();
+  await expect(host.getByRole('button',{name:'Prochaine victime'})).toBeEnabled();
+  const scan=host.waitForResponse(r=>r.url().endsWith(`/api/rooms/${room.code}/scan`),{timeout:45000});await host.getByRole('button',{name:'Prochaine victime'}).click();
+  const response=await scan;expect(response.request().postDataJSON().source).toBe('local');
+  if(response.status()===400)expect((await response.json()).error).toContain('Aucune cible reconnue');else expect(response.ok()).toBeTruthy();
+  await host.getByRole('button',{name:'Couper le téléphone'}).click();await expect(camera.getByText('CAMÉRA ÉTEINTE',{exact:true})).toBeVisible();
+  await cameraContext.close();await hostContext.close();
+});

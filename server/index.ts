@@ -60,6 +60,7 @@ app.post('/api/rooms',(req,res)=>{
   const room=createRoom(body.name,body.mode);res.json({room:publicRoom(room),hostToken:room.hostToken});
 });
 app.get('/api/rooms/:code',(req,res)=>res.json(publicRoom(getRoom(String(req.params.code)))));
+app.get('/api/rooms/:code/camera-access',(req,res)=>res.json({cameraToken:host(req).cameraToken}));
 app.post('/api/rooms/:code/scan',async(req,res)=>{
   const room=host(req);
   if(room.busy) throw new Error('L’expert réfléchit déjà.');
@@ -111,8 +112,9 @@ app.post('/api/rooms/:code/refresh',async(req,res)=>{
   const room=getRoom(String(req.params.code));await reconcile(room);res.json(publicRoom(room));
 });
 app.post('/api/rooms/:code/close',(req,res)=>{
-  const room=host(req);room.live=false;room.lastFrame=undefined;
+  const room=host(req);room.live=false;room.lastFrame=undefined;room.sourceSocket=undefined;room.videoSource=null;
   if(room.hostSocket) io.to(room.hostSocket).emit('stop-live');
+  if(room.cameraSocket) io.to(room.cameraSocket).emit('stop-live');
   io.to(room.code).emit('live-ended');publish(room);res.json({ok:true});
 });
 
@@ -133,39 +135,48 @@ async function reconcile(room:InternalRoom) {
 }
 setInterval(()=>{
   for(const r of rooms.values()) {
-    if(!r.peers.size&&!r.hostSocket&&Date.now()-r.lastTouched>6*3600_000) rooms.delete(r.code);
+    if(!r.peers.size&&!r.hostSocket&&!r.cameraSocket&&Date.now()-r.lastTouched>6*3600_000) rooms.delete(r.code);
     else void reconcile(r);
   }
   for(const [key,budget] of budgets) if(budget.until<Date.now()) budgets.delete(key);
 },2000).unref();
 
 io.on('connection',socket=>{
-  let joined:InternalRoom|undefined, isHost=false, lastFrameAt=0;
+  let joined:InternalRoom|undefined, isHost=false, isCamera=false, lastFrameAt=0;
   socket.on('join',(data,ack)=>{
     try{
       if(joined) throw new Error('Déjà connecté à une salle.');
-      const input=z.object({code:z.string().regex(/^[A-F0-9]{8}$/),hostToken:z.string().optional()}).parse(data);
+      const input=z.object({code:z.string().regex(/^[A-F0-9]{8}$/),hostToken:z.string().optional(),cameraToken:z.string().optional()}).parse(data);
       const room=getRoom(input.code);
       isHost=input.hostToken===room.hostToken;
-      if(!isHost&&room.peers.size>=40) throw new Error('La salle est pleine (40 spectateurs maximum).');
+      isCamera=input.cameraToken===room.cameraToken;
+      if(!isHost&&!isCamera&&room.peers.size>=40) throw new Error('La salle est pleine (40 spectateurs maximum).');
       if(input.hostToken&&!isHost) throw new Error('Accès vendeur invalide.');
+      if(input.cameraToken&&!isCamera) throw new Error('Accès caméra invalide. Scannez le QR de la régie.');
+      if(isCamera&&room.cameraSocket&&io.sockets.sockets.has(room.cameraSocket)) throw new Error('Un téléphone caméra est déjà connecté.');
       if(isHost&&room.hostSocket&&io.sockets.sockets.has(room.hostSocket)) throw new Error('La régie est déjà ouverte sur un autre appareil.');
       joined=room;socket.join(room.code);
-      if(isHost) room.hostSocket=socket.id;else room.peers.add(socket.id);
+      if(isHost) room.hostSocket=socket.id;else if(isCamera)room.cameraSocket=socket.id;else room.peers.add(socket.id);
       ack?.({ok:true,room:publicRoom(room),host:isHost});publish(room);
-      if(!isHost&&room.lastFrame) socket.emit('frame',{image:room.lastFrame,at:Date.now()});
-      if(!isHost&&room.hostSocket&&room.live) io.to(room.hostSocket).emit('viewer',socket.id);
+      if(!isCamera&&room.lastFrame) socket.emit('frame',{image:room.lastFrame,at:Date.now()});
+      if(!isCamera&&room.sourceSocket&&room.sourceSocket!==socket.id&&room.live) io.to(room.sourceSocket).emit('viewer',socket.id);
     }catch(e){ack?.({error:e instanceof Error?e.message:'Connexion impossible.'});}
   });
   socket.on('live',value=>{
-    if(!joined||!isHost||typeof value!=='boolean')return;
+    if(!joined||(!isHost&&!isCamera)||typeof value!=='boolean')return;
+    if(!value&&joined.sourceSocket!==socket.id)return;
+    if(value){
+      const previous=joined.sourceSocket;
+      joined.sourceSocket=socket.id;joined.videoSource=isCamera?'phone':'host';
+      if(previous&&previous!==socket.id)io.to(previous).emit('stop-live');
+    }
     joined.live=value;
-    if(value) for(const id of joined.peers) socket.emit('viewer',id);
-    else{joined.lastFrame=undefined;socket.to(joined.code).emit('live-ended');}
+    if(value){for(const id of joined.peers)socket.emit('viewer',id);if(isCamera&&joined.hostSocket)socket.emit('viewer',joined.hostSocket);}
+    else{joined.sourceSocket=undefined;joined.videoSource=null;joined.lastFrame=undefined;socket.to(joined.code).emit('live-ended');}
     publish(joined);
   });
   socket.on('frame',(image:unknown)=>{
-    if(!joined||!isHost||!joined.live||Date.now()-lastFrameAt<200||typeof image!=='string'||image.length>170000||!image.startsWith('data:image/jpeg;base64,')) return;
+    if(!joined||joined.sourceSocket!==socket.id||!joined.live||Date.now()-lastFrameAt<200||typeof image!=='string'||image.length>170000||!image.startsWith('data:image/jpeg;base64,')) return;
     lastFrameAt=Date.now();joined.lastFrame=image;
     socket.to(joined.code).volatile.emit('frame',{image,at:Date.now()});
   });
@@ -175,7 +186,7 @@ io.on('connection',socket=>{
       limit(`signal:${socket.id}`,200,60000);
       const {to,payload}=z.object({to:z.string().max(64),payload:z.unknown()}).parse(data);
       if(JSON.stringify(payload).length>24000) return;
-      const allowed=isHost?joined.peers.has(to):to===joined.hostSocket;
+      const allowed=joined.sourceSocket===socket.id?(joined.peers.has(to)||to===joined.hostSocket):(to===joined.sourceSocket&&(isHost||joined.peers.has(socket.id)));
       if(allowed) io.to(to).emit('signal',{from:socket.id,payload});
     }catch{}
   });
@@ -186,8 +197,10 @@ io.on('connection',socket=>{
   socket.on('disconnect',()=>{
     if(!joined) return;
     joined.peers.delete(socket.id);
-    if(isHost&&joined.hostSocket===socket.id){joined.hostSocket=undefined;joined.live=false;joined.lastFrame=undefined;io.to(joined.code).emit('live-ended');}
-    else if(joined.hostSocket)io.to(joined.hostSocket).emit('viewer-left',socket.id);
+    if(isHost&&joined.hostSocket===socket.id)joined.hostSocket=undefined;
+    if(isCamera&&joined.cameraSocket===socket.id)joined.cameraSocket=undefined;
+    if(joined.sourceSocket===socket.id){joined.sourceSocket=undefined;joined.videoSource=null;joined.live=false;joined.lastFrame=undefined;io.to(joined.code).emit('live-ended');}
+    else if(joined.sourceSocket)io.to(joined.sourceSocket).emit('viewer-left',socket.id);
     publish(joined);
   });
 });
