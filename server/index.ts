@@ -21,6 +21,24 @@ const nextApp = next({dev, hostname:'0.0.0.0',port});
 await nextApp.prepare();
 const app = express();
 app.disable('x-powered-by');
+// Render terminates TLS in front of the app: trust one proxy hop so req.ip and req.protocol are the visitor's.
+app.set('trust proxy',1);
+if(!dev){
+  // Force HTTPS in production (the health check stays reachable over plain HTTP for the platform).
+  app.use((req,res,next)=>{
+    if(req.path==='/api/health'||req.secure||req.headers['x-forwarded-proto']==='https')return next();
+    const host=req.headers.host;if(!host){res.status(400).end();return;}
+    res.redirect(308,`https://${host}${req.originalUrl}`);
+  });
+}
+app.use((_req,res,next)=>{
+  if(!dev)res.setHeader('Strict-Transport-Security','max-age=31536000; includeSubDomains');
+  res.setHeader('X-Content-Type-Options','nosniff');
+  res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options','SAMEORIGIN');
+  res.setHeader('Permissions-Policy','camera=(self), microphone=(self), geolocation=(), payment=()');
+  next();
+});
 app.use(express.json({limit:'2mb'}));
 const server = createServer(app);
 const io = new Server(server,{maxHttpBufferSize:180_000, cors:{origin:false}, pingTimeout:20000});
@@ -51,16 +69,23 @@ function host(req:express.Request) {
   return room;
 }
 const imageSchema=z.string().max(1_500_000).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/);
-app.get('/api/config',(_req,res)=>res.json({vision:!!process.env.OPENAI_API_KEY,contractAddress:address,chainId:10143,publicUrl:process.env.PUBLIC_URL||'',iceServers}));
+app.get('/api/config',(_req,res)=>res.json({vision:!!process.env.OPENAI_API_KEY,contractAddress:address,chainId:10143,publicUrl:process.env.PUBLIC_URL||'',iceServers,analytics:process.env.ANALYTICS_DOMAIN?{domain:process.env.ANALYTICS_DOMAIN,src:process.env.ANALYTICS_SCRIPT_URL||'https://plausible.io/js/script.js'}:null}));
 app.get('/api/health',(_req,res)=>res.json({ok:true,chainId:10143,contractConfigured:!!address}));
 app.post('/api/rooms',(req,res)=>{
   limit(`create:${req.ip}`,8,60000);
-  const body=z.object({name:z.string().trim().min(1).max(60),mode:z.enum(['demo','chain'])}).parse(req.body);
+  // Anti-spam: hidden "website" field must stay empty (bots fill it) and a human needs a moment to fill the form.
+  const body=z.object({name:z.string().trim().min(1).max(60),mode:z.enum(['demo','chain']),website:z.string().max(0).optional(),elapsed:z.number().min(0).optional()}).parse(req.body);
+  if(typeof body.elapsed==='number'&&body.elapsed<800) throw new Error('Formulaire envoyé trop vite. Réessayez.');
   if(body.mode==='chain'&&!address) throw new Error('Le contrat doit être déployé avant d’ouvrir une salle Monad.');
   if(rooms.size>=100) throw new Error('Toutes les salles sont occupées.');
   const room=createRoom(body.name,body.mode);res.json({room:publicRoom(room),hostToken:room.hostToken});
 });
-app.get('/api/rooms/:code',(req,res)=>res.json(publicRoom(getRoom(String(req.params.code)))));
+app.get('/api/rooms/:code',(req,res)=>{
+  // Stricter budget than the global one: makes guessing room codes impractical.
+  try{limit(`lookup:${req.ip}`,30,60000);}catch{res.status(429).json({error:'Trop de tentatives. Patientez une minute.'});return;}
+  if(!/^[A-Fa-f0-9]{8}$/.test(String(req.params.code))){res.status(404).json({error:'Code invalide : 8 caractères, chiffres de 0 à 9 et lettres de A à F.'});return;}
+  res.json(publicRoom(getRoom(String(req.params.code))));
+});
 app.get('/api/rooms/:code/camera-access',(req,res)=>res.json({cameraToken:host(req).cameraToken}));
 app.post('/api/rooms/:code/scan',async(req,res)=>{
   const room=host(req);

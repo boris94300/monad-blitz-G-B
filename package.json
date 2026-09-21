@@ -12,7 +12,8 @@
     "contracts:compile": "node scripts/compile-contract.mjs",
     "model:download": "node scripts/download-model.mjs",
     "contracts:test": "node scripts/run-forge.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:links": "node scripts/check-links.mjs"
   },
   "dependencies": {
     "next": "16.3.5",

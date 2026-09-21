@@ -49,7 +49,7 @@ test('home works at desktop and mobile widths with no horizontal overflow',async
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
   await page.getByRole('button',{name:'Ouvrir ma salle'}).click();await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByRole('button',{name:'Fermer',exact:true}).click();
-  await page.getByLabel('Code de la salle').fill('FFFFFFFF');await page.getByRole('button',{name:'Entrer',exact:true}).click();
+  await page.getByLabel('Code de la salle').fill('FFFFFFFF');await page.getByRole('button',{name:'Rejoindre la salle',exact:true}).click();
   await expect(page.locator('.home-error')).toContainText('Salle introuvable');
 });
 
