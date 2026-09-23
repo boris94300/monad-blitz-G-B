@@ -22,6 +22,7 @@ export type Room = {
 export type Config = {
   vision: boolean; contractAddress: `0x${string}` | null; publicUrl: string;
   chainId: number; iceServers: RTCIceServer[];
+  analytics?: {domain: string; src: string} | null;
 };
 
 export type TrackingFrame={candidates:Candidate[];width:number;height:number;at:number};

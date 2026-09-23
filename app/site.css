@@ -1,0 +1,37 @@
+/* Site-wide additions: accessibility, consent banner, legal pages, 404, form feedback. Loaded last. */
+.skip-link{position:absolute;left:12px;top:-60px;z-index:100;background:var(--ink);color:#fff;padding:10px 16px;border-radius:8px;font-weight:600}
+.skip-link:focus{top:12px}
+.hp{position:absolute!important;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+.field-error{color:#b3261e;font-size:13px;font-weight:600;margin:8px 0 0;flex-basis:100%}
+input[aria-invalid="true"]{border-color:#b3261e!important;outline-color:#b3261e}
+.join-section form{flex-wrap:wrap}
+
+.footer-links{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center}
+.footer-links a,.footer-links button,.legal-footer a,.legal-footer button{background:none;border:0;padding:4px 0;color:inherit;font:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+
+.consent{position:fixed;left:12px;right:12px;bottom:12px;z-index:15;max-width:760px;margin:0 auto;display:flex;gap:20px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:#fff;color:#1d1d1f;border:1px solid #d2d2d7;border-radius:16px;padding:18px 20px;box-shadow:0 12px 50px #0003}
+.consent h2{font-size:16px;margin:0 0 4px}.consent p{margin:0;font-size:13px;line-height:1.5;color:#4a4a52;max-width:52ch}.consent a{text-decoration:underline}
+.consent-actions{display:flex;gap:10px;margin-left:auto}
+body:has(.mobile-buy-dock) .consent{bottom:92px}
+
+.legal{max-width:780px;margin:0 auto;padding:56px 24px 40px}
+.legal h1{font-size:clamp(34px,6vw,52px);line-height:1.05;margin:12px 0 16px}
+.legal-intro{font-size:18px;line-height:1.55;color:var(--ink);margin:0 0 32px}
+.legal section{border-top:1px solid var(--line);padding:22px 0}
+.legal h2{font-size:21px;margin:0 0 10px}
+.legal p,.legal li{font-size:16px;line-height:1.65;color:#3a3a40}
+.legal ul{padding-left:22px;display:grid;gap:10px;margin:0}
+.legal a{color:#0058b0;text-decoration:underline;text-underline-offset:3px}
+.legal-note{font-size:14px!important;color:#55555c!important;border-top:1px solid var(--line);padding-top:20px;margin-top:8px}
+.legal-footer{display:flex;flex-wrap:wrap;gap:10px 24px;justify-content:space-between;padding:24px 5.2%;border-top:1px solid var(--line);font-size:13px;color:#55555c}
+.legal-footer nav{display:flex;flex-wrap:wrap;gap:6px 18px}
+
+.notfound{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:18px;max-width:720px;margin:0 auto;padding:40px 24px}
+.notfound h1{font-size:clamp(36px,7vw,64px);line-height:1.05;margin:0}
+.notfound p{font-size:17px;line-height:1.6;color:#3a3a40;margin:0;max-width:56ch}
+.notfound-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:8px}
+
+/* Contrast fixes (WCAG AA 4.5:1 for text) */
+.empty-slots,.lot-number,.explorer-link,.setup .explorer-link{color:#5c5c63!important}
+.explorer-link{color:#0066cc!important}
+@media(max-width:600px){.consent{padding:14px 16px;gap:12px}.consent p{font-size:12.5px}.consent-actions{width:100%}.consent-actions .button{flex:1;padding:12px 16px}}
